@@ -1,3 +1,13 @@
+---
+title: Corrective RAG
+emoji: 📚
+colorFrom: purple
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 📚 Corrective RAG Assistant
 
 A self-correcting Retrieval-Augmented Generation system that grades retrieved chunks for relevance and falls back to web search when documents can't answer the question.
