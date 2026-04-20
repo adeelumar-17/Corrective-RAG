@@ -5,6 +5,10 @@ This is the main backend entry point. It provides:
   - REST API endpoints for document upload, querying, status, and clearing
   - CORS middleware for cross-origin requests (React frontend on Vercel)
 
+IMPORTANT: Heavy ML modules (sentence-transformers, torch, langchain) are
+imported lazily inside endpoint functions — NOT at startup. This ensures
+uvicorn binds the port fast enough for Render's health check.
+
 Run locally:
     uvicorn main:app --reload
 
@@ -20,12 +24,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Load .env before importing rag modules (they read env vars at import time)
+# Load .env (must happen before any rag imports)
 load_dotenv()
 
-from rag.ingestor import ingest_pdfs  # noqa: E402
-from rag.graph import run_graph       # noqa: E402
-from rag import PINECONE_API_KEY, PINECONE_INDEX_NAME  # noqa: E402
+# Only import lightweight config — no heavy ML deps here
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
+PINECONE_INDEX_NAME = "rag-docs"
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +37,7 @@ from rag import PINECONE_API_KEY, PINECONE_INDEX_NAME  # noqa: E402
 # ---------------------------------------------------------------------------
 app = FastAPI(
     title="Corrective RAG Assistant",
-    description="A self-correcting RAG system with LangGraph, Pinecone, and Groq",
+    description="A self-correcting RAG system with LangGraph, Pinecone, and Gemini",
     version="1.0.0",
 )
 
@@ -61,7 +65,7 @@ class QueryResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# API Endpoints
+# API Endpoints (heavy imports are LAZY — inside the functions)
 # ---------------------------------------------------------------------------
 @app.post("/api/upload")
 async def upload_pdfs(files: List[UploadFile] = File(...)):
@@ -86,8 +90,10 @@ async def upload_pdfs(files: List[UploadFile] = File(...)):
         content = await file.read()
         pdf_files.append((file.filename, content))
 
-    # Process the PDFs
+    # Lazy import — only loads heavy ML modules on first upload
     try:
+        from rag.ingestor import ingest_pdfs
+
         chunk_count = ingest_pdfs(pdf_files)
         return {
             "message": "Documents processed successfully",
@@ -112,6 +118,8 @@ async def query(request: QueryRequest):
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
     try:
+        from rag.graph import run_graph
+
         result = run_graph(request.question)
         return QueryResponse(**result)
     except Exception as e:
