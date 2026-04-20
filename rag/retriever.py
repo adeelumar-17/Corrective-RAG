@@ -11,7 +11,7 @@ Why MMR over plain similarity?
 
 from typing import List
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_pinecone import PineconeVectorStore
 
 from rag import PINECONE_INDEX_NAME, RETRIEVAL_K, RETRIEVAL_FETCH_K

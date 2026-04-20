@@ -13,7 +13,8 @@ potentially hallucinated answer.
 from typing import List, Tuple
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.schema import Document, HumanMessage
+from langchain_core.documents import Document
+from langchain_core.messages import HumanMessage
 
 from rag import GOOGLE_API_KEY, LLM_MODEL
 

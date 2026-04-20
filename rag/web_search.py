@@ -12,7 +12,7 @@ clean, structured results that work well as LLM context.
 from typing import List
 
 from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 
 def search_web(query: str) -> List[Document]:

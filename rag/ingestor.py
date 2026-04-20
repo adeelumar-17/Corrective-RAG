@@ -12,7 +12,7 @@ import io
 from typing import List, Tuple
 
 from pypdf import PdfReader
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore

@@ -15,7 +15,7 @@ and returns a dict of state fields to update.
 
 from typing import TypedDict, List
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langgraph.graph import StateGraph, START, END
 
 from rag.retriever import retrieve_documents
