@@ -10,10 +10,10 @@ the information came from.
 
 from typing import List, Tuple
 
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.schema import Document, HumanMessage
 
-from rag import GROQ_API_KEY, LLM_MODEL
+from rag import GOOGLE_API_KEY, LLM_MODEL
 
 
 # Generation prompt — instructs the LLM to answer from context only
@@ -48,10 +48,10 @@ def generate_answer(
           - sources: List of unique source identifiers (filenames or URLs).
     """
 
-    # Initialize Groq LLM with temperature=0 for factual, deterministic answers
-    llm = ChatGroq(
-        api_key=GROQ_API_KEY,
-        model_name=LLM_MODEL,
+    # Initialize Gemini LLM with temperature=0 for factual, deterministic answers
+    llm = ChatGoogleGenerativeAI(
+        model=LLM_MODEL,
+        google_api_key=GOOGLE_API_KEY,
         temperature=0,
     )
 
