@@ -7,13 +7,13 @@ This is the main backend entry point. It provides:
 
 IMPORTANT: Heavy ML modules (sentence-transformers, torch, langchain) are
 imported lazily inside endpoint functions — NOT at startup. This ensures
-uvicorn binds the port fast enough for Render's health check.
+uvicorn binds the port fast enough for the health check.
 
 Run locally:
     uvicorn main:app --reload
 
-Deploy on Render:
-    uvicorn main:app --host 0.0.0.0 --port $PORT
+Deploy on HuggingFace Spaces:
+    Uses Dockerfile → uvicorn main:app --host 0.0.0.0 --port 7860
 """
 
 import os

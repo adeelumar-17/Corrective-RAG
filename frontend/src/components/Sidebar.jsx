@@ -25,28 +25,19 @@ export default function Sidebar({
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef(null)
 
-  // ---- File selection ----
-  function addFiles(fileList) {
+  // ---- File selection + auto-process ----
+  async function addFiles(fileList) {
     const pdfs = Array.from(fileList).filter(
       (f) => f.type === 'application/pdf'
     )
-    setSelectedFiles((prev) => {
-      const names = new Set(prev.map((f) => f.name))
-      return [...prev, ...pdfs.filter((f) => !names.has(f.name))]
-    })
-  }
+    if (pdfs.length === 0) return
 
-  function removeFile(index) {
-    setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  // ---- Upload ----
-  async function handleProcess() {
-    if (selectedFiles.length === 0 || isProcessing) return
+    // Show files in the list while processing
+    setSelectedFiles(pdfs)
     setIsProcessing(true)
 
     try {
-      const data = await api.uploadPDFs(selectedFiles)
+      const data = await api.uploadPDFs(pdfs)
       setSelectedFiles([])
       onUploadComplete(data.chunk_count)
     } catch (err) {
@@ -131,26 +122,20 @@ export default function Sidebar({
 
         {selectedFiles.length > 0 && (
           <div className="file-list">
-            {selectedFiles.map((file, i) => (
+            {selectedFiles.map((file) => (
               <div className="file-item" key={file.name}>
                 <span className="file-item-name" title={file.name}>📄 {file.name}</span>
-                <button className="file-item-remove" onClick={() => removeFile(i)}>✕</button>
               </div>
             ))}
           </div>
         )}
 
-        <button
-          className="btn btn-primary"
-          disabled={selectedFiles.length === 0 || isProcessing}
-          onClick={handleProcess}
-        >
-          {isProcessing ? (
+        {isProcessing && (
+          <div className="processing-indicator">
             <span className="btn-loader"><span className="dot" /><span className="dot" /><span className="dot" /></span>
-          ) : (
-            'Process Documents'
-          )}
-        </button>
+            <span>Processing documents...</span>
+          </div>
+        )}
       </div>
 
       {/* Status */}
