@@ -13,13 +13,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- API Keys ---
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
 
-# Set API keys as env vars so LangChain integrations can auto-detect them
-if GOOGLE_API_KEY:
-    os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
+# Set PINECONE_API_KEY as env var so langchain-pinecone can auto-detect it
 if PINECONE_API_KEY:
     os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
 
@@ -28,7 +26,7 @@ if TAVILY_API_KEY:
     os.environ["TAVILY_API_KEY"] = TAVILY_API_KEY
 
 # --- Model Settings ---
-LLM_MODEL = "gemini-2.0-flash"                # Google Gemini model for grading & generation
+LLM_MODEL = "llama-3.3-70b-versatile"        # Groq model for grading & generation
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"   # Local HuggingFace embedding model (384 dims)
 EMBEDDING_DIMENSION = 384                     # Output dimension of BGE-small
 
