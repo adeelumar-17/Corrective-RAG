@@ -1,200 +1,170 @@
----
-title: Corrective RAG
-emoji: 📚
-colorFrom: purple
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
+# Corrective RAG
 
-# 📚 Corrective RAG Assistant
+Self-correcting Retrieval-Augmented Generation (CRAG) with a FastAPI backend and React frontend.
 
-A self-correcting Retrieval-Augmented Generation system that grades retrieved chunks for relevance and falls back to web search when documents can't answer the question.
+The system retrieves context from uploaded PDFs, grades relevance with an LLM, and automatically falls back to web search when local documents are not enough.
 
-![Python](https://img.shields.io/badge/Python-3.9+-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-Latest-009688)
-![LangGraph](https://img.shields.io/badge/LangGraph-Agentic-orange)
-![Pinecone](https://img.shields.io/badge/Pinecone-Vector_DB-purple)
+## What Makes It "Corrective"
 
----
+Classic RAG can generate answers from weak context. This project adds a correction step:
+
+1. Retrieve top document chunks from Pinecone (MMR)
+2. Grade each chunk for relevance using Groq LLM
+3. If too many chunks are irrelevant, trigger Tavily web search
+4. Generate the final answer with explicit sources
+
+This reduces hallucinations when uploaded documents do not cover the question.
 
 ## Architecture
 
+```text
+Question
+  -> Retrieve from Pinecone (MMR)
+  -> Grade chunk relevance (yes/no)
+     -> relevant enough: Generate from docs
+     -> not relevant enough: Web search (Tavily) -> Generate
+  -> Return answer + sources + web_fallback flag
 ```
-User Question
-     │
-     ▼
-┌──────────┐
-│ RETRIEVE │  Search Pinecone (MMR) → top 5 diverse chunks
-└────┬─────┘
-     ▼
-┌──────────┐
-│  GRADE   │  LLM evaluates each chunk: relevant? yes/no
-└────┬─────┘
-     │
-  ┌──┴──┐
-  │     │
-  ▼     ▼
- YES    NO
-  │     │
-  │  ┌──┴───────┐
-  │  │WEB SEARCH│  Tavily API → 3 web results
-  │  └──┬───────┘
-  │     │
-  ▼     ▼
-┌──────────┐
-│ GENERATE │  Groq LLM → final answer with source attribution
-└──────────┘
-     │
-     ▼
-📄 From Docs  or  🌐 From Web
-```
-
-## Features
-
-- **PDF Upload** — Drag-and-drop multiple PDFs; text is extracted, chunked, and stored
-- **Smart Retrieval** — MMR search returns diverse, relevant chunks (not duplicates)
-- **LLM Grading** — Each chunk is evaluated for relevance before generating
-- **Web Fallback** — Automatically searches the web when documents can't help
-- **Source Attribution** — Every answer shows whether it came from docs 📄 or web 🌐
-- **Expandable Sources** — Click to see exactly which pages/URLs were used
-- **Premium UI** — Dark glassmorphism theme with smooth animations
-- **REST API** — Clean FastAPI backend; any frontend can consume it
 
 ## Tech Stack
 
-| Component | Tool |
-|-----------|------|
-| **LLM** | Groq API (LLaMA 3.3 70B) |
-| **Embeddings** | HuggingFace BGE-small-en-v1.5 (local) |
-| **Vector DB** | Pinecone (cloud, serverless) |
-| **Search** | MMR (Maximal Marginal Relevance) |
-| **Web Search** | Tavily API |
-| **Agent Framework** | LangGraph |
-| **Backend** | FastAPI + Uvicorn |
-| **Frontend** | Vanilla HTML/CSS/JS |
-| **Deployment** | Render |
+- Backend: FastAPI + Uvicorn
+- Orchestration: LangGraph
+- LLM: Groq (`llama-3.3-70b-versatile`)
+- Embeddings: HuggingFace BGE small (`BAAI/bge-small-en-v1.5`, 384-dim, local CPU)
+- Vector DB: Pinecone Serverless
+- Web fallback: Tavily Search
+- Frontend: React + Vite
 
 ## Project Structure
 
-```
-corrective-rag/
-├── main.py                 # FastAPI backend (API endpoints + static serving)
-├── rag/
-│   ├── __init__.py         # Config & shared constants
-│   ├── ingestor.py         # PDF → chunks → embeddings → Pinecone
-│   ├── retriever.py        # Pinecone MMR search
-│   ├── grader.py           # LLM relevance grading
-│   ├── web_search.py       # Tavily web search fallback
-│   ├── generator.py        # Groq LLM answer generation
-│   └── graph.py            # LangGraph CRAG state machine
-├── static/
-│   ├── index.html          # Frontend page
-│   ├── style.css           # Dark theme styling
-│   └── script.js           # Chat logic & API calls
+```text
+.
+├── main.py                    # FastAPI API entry point
 ├── requirements.txt
-├── .env.example
-├── LEARNING_GUIDE.md       # Detailed concept explanations
-└── README.md
+├── Dockerfile
+├── LEARNING_GUIDE.md
+├── rag/
+│   ├── __init__.py            # Env + constants
+│   ├── ingestor.py            # PDF -> chunks -> embeddings -> Pinecone
+│   ├── retriever.py           # Pinecone MMR retrieval
+│   ├── grader.py              # LLM relevance grading
+│   ├── web_search.py          # Tavily fallback search
+│   ├── generator.py           # Final answer generation + sources
+│   └── graph.py               # LangGraph CRAG workflow
+└── frontend/
+    ├── package.json
+    ├── vite.config.js         # Dev proxy /api -> localhost:8000
+    ├── vercel.json
+    └── src/
+        ├── App.jsx
+        ├── api.js
+        └── components/
 ```
 
-## Setup
+## API Endpoints
 
-### 1. Clone the repo
+- `POST /api/upload`: Upload one or more PDF files (`multipart/form-data`, field name `files`)
+- `POST /api/query`: Ask a question (`{"question": "..."}`)
+- `GET /api/status`: Check if vectors are loaded and get chunk count
+- `DELETE /api/clear`: Clear all vectors from Pinecone index
+- `GET /`: API health/info response
 
-```bash
-git clone https://github.com/yourusername/corrective-rag.git
-cd corrective-rag
-```
+## Quick Start (Local)
 
-### 2. Create virtual environment
-
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or: venv\Scripts\activate  # Windows
-```
-
-### 3. Install dependencies
+### 1) Clone and set up Python environment
 
 ```bash
+git clone https://github.com/<your-username>/Corrective-RAG.git
+cd Corrective-RAG
+
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Get free API keys
+### 2) Configure environment variables
 
-| Service | URL | Free Tier |
-|---------|-----|-----------|
-| Groq | [console.groq.com](https://console.groq.com) | Generous free tier |
-| Tavily | [tavily.com](https://tavily.com) | 1,000 searches/month |
-| Pinecone | [pinecone.io](https://www.pinecone.io/) | 1 index, ~100K vectors |
+Create a `.env` file in the project root:
 
-### 5. Configure environment
-
-```bash
-cp .env.example .env
-# Edit .env and add your API keys
+```env
+GROQ_API_KEY=your_groq_key
+TAVILY_API_KEY=your_tavily_key
+PINECONE_API_KEY=your_pinecone_key
 ```
 
-### 6. Run the app
+### 3) Run backend
 
 ```bash
 uvicorn main:app --reload
 ```
 
-Open [http://localhost:8000](http://localhost:8000) in your browser.
+Backend runs at `http://localhost:8000`.
 
-> **Note:** The embedding model (~130MB) downloads on first run. You'll see this happen in the terminal.
+### 4) Run frontend
 
-## Deploy to Render
+In a second terminal:
 
-### Step-by-step
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-1. **Push to GitHub**
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git remote add origin https://github.com/yourusername/corrective-rag.git
-   git push -u origin main
-   ```
+Frontend runs at `http://localhost:5173`.
 
-2. **Create Render Web Service**
-   - Go to [render.com](https://render.com) → New Web Service
-   - Connect your GitHub repo
-   - **Build command:** `pip install -r requirements.txt`
-   - **Start command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
+The Vite dev server proxies `/api/*` requests to `http://localhost:8000`.
 
-3. **Add Environment Variables** (in Render dashboard → Environment)
-   ```
-   GROQ_API_KEY=your_key_here
-   TAVILY_API_KEY=your_key_here
-   PINECONE_API_KEY=your_key_here
-   ```
+## How Retrieval Works
 
-4. **Deploy** — Your app will be live at `https://your-app.onrender.com`
+- PDFs are parsed page-by-page with `pypdf`
+- Text is chunked using:
+  - chunk size: `500`
+  - chunk overlap: `100`
+- Chunks are embedded locally with BGE small
+- Stored in Pinecone index `rag-docs` (cosine similarity)
+- Retriever uses MMR (`k=5`, `fetch_k=20`) for diverse context
 
-> **✅ Pinecone advantage:** Since Pinecone is cloud-hosted, your uploaded documents persist across deploys — no re-upload needed!
+## Response Format
 
-## API Endpoints
+`POST /api/query` returns:
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/upload` | Upload PDF files (multipart/form-data) |
-| `POST` | `/api/query` | Ask a question (`{"question": "..."}`) |
-| `GET` | `/api/status` | Check document count |
-| `DELETE` | `/api/clear` | Remove all vectors from Pinecone |
-| `GET` | `/` | Serve the frontend |
+```json
+{
+  "answer": "...",
+  "sources": ["file.pdf (page 3)", "https://..."],
+  "used_web_search": false
+}
+```
 
-## Environment Variables
+## Deployment Notes
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GROQ_API_KEY` | ✅ | Groq API key for LLM (grading + generation) |
-| `TAVILY_API_KEY` | ✅ | Tavily API key for web search fallback |
-| `PINECONE_API_KEY` | ✅ | Pinecone API key for vector storage |
+### Backend
+
+- The repository includes a `Dockerfile` and is compatible with container-based deployment (for example, Hugging Face Spaces Docker mode or similar platforms).
+- Set `GROQ_API_KEY`, `TAVILY_API_KEY`, and `PINECONE_API_KEY` in your deployment environment.
+
+### Frontend
+
+- `frontend/` is ready for Vercel deployment.
+- Set `VITE_API_URL` to your deployed backend URL so production requests target the API.
+
+## Known Behavior
+
+- First ingestion may take longer because the embedding model is downloaded and cached locally.
+- Frontend session logic clears Pinecone once per new browser session to prevent free-tier accumulation during iterative demos.
+
+## Learning Resource
+
+For a beginner-friendly deep dive into the concepts and file-by-file explanation, read `LEARNING_GUIDE.md`.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit changes
+4. Open a pull request
 
 ## License
 
-MIT
+No LICENSE file is currently included. Add your preferred license (for example, MIT) before open-source distribution.
