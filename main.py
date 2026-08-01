@@ -17,9 +17,9 @@ Deploy on HuggingFace Spaces:
 """
 
 import os
-from typing import List
+from typing import List, Optional
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -56,6 +56,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 class QueryRequest(BaseModel):
     question: str
+    session_id: str
 
 
 class QueryResponse(BaseModel):
@@ -68,16 +69,23 @@ class QueryResponse(BaseModel):
 # API Endpoints (heavy imports are LAZY — inside the functions)
 # ---------------------------------------------------------------------------
 @app.post("/api/upload")
-async def upload_pdfs(files: List[UploadFile] = File(...)):
+async def upload_pdfs(
+    files: List[UploadFile] = File(...),
+    session_id: str = Form(...),
+):
     """
     Upload and process PDF files.
 
-    Accepts multiple PDF files via multipart/form-data.
-    Extracts text, chunks, embeds, and stores in Pinecone.
+    Accepts multiple PDF files via multipart/form-data along with a session_id.
+    Extracts text, chunks, embeds, and stores in Pinecone under the
+    session's namespace for user isolation.
     Returns the number of chunks created.
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
+
+    if not session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id is required")
 
     # Validate all files are PDFs
     pdf_files = []
@@ -94,7 +102,7 @@ async def upload_pdfs(files: List[UploadFile] = File(...)):
     try:
         from rag.ingestor import ingest_pdfs
 
-        chunk_count = ingest_pdfs(pdf_files)
+        chunk_count = ingest_pdfs(pdf_files, session_id)
         return {
             "message": "Documents processed successfully",
             "chunk_count": chunk_count,
@@ -109,29 +117,34 @@ async def query(request: QueryRequest):
     Ask a question and get an answer from the CRAG pipeline.
 
     The system will:
-    1. Search Pinecone for relevant document chunks
-    2. Grade chunks for relevance (LLM-based)
-    3. If relevant → generate answer from documents
-    4. If irrelevant → fall back to web search → generate answer
+    1. Search Pinecone for relevant document chunks (in the user's namespace)
+    2. Classify the question as document-meta or knowledge query
+    3. Grade chunks for relevance (LLM-based)
+    4. If relevant → generate answer from documents
+    5. If document-meta question → always generate from documents (never web search)
+    6. If irrelevant knowledge query → fall back to web search → generate answer
     """
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
+    if not request.session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id is required")
+
     try:
         from rag.graph import run_graph
 
-        result = run_graph(request.question)
+        result = run_graph(request.question, request.session_id)
         return QueryResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
 
 @app.get("/api/status")
-async def status():
+async def status(session_id: Optional[str] = Query(None)):
     """
-    Check whether documents are loaded in Pinecone.
+    Check whether documents are loaded in Pinecone for this session.
 
-    Returns the total number of vectors (chunks) in the index.
+    Returns the total number of vectors (chunks) in the session's namespace.
     """
     try:
         from pinecone import Pinecone
@@ -142,7 +155,14 @@ async def status():
         if PINECONE_INDEX_NAME in existing_indexes:
             index = pc.Index(PINECONE_INDEX_NAME)
             stats = index.describe_index_stats()
-            total_vectors = stats.total_vector_count
+
+            if session_id:
+                # Check only this session's namespace
+                ns_stats = stats.namespaces.get(session_id, None)
+                total_vectors = ns_stats.vector_count if ns_stats else 0
+            else:
+                total_vectors = stats.total_vector_count
+
             return {
                 "docs_loaded": total_vectors > 0,
                 "chunk_count": total_vectors,
@@ -155,11 +175,12 @@ async def status():
 
 
 @app.delete("/api/clear")
-async def clear_database():
+async def clear_database(session_id: Optional[str] = Query(None)):
     """
-    Delete all vectors from the Pinecone index.
+    Delete vectors from the Pinecone index for a specific session namespace.
 
-    This removes all uploaded document data but keeps the index itself.
+    If session_id is provided, only that namespace is cleared.
+    Otherwise, all vectors are cleared (backward compatibility).
     """
     try:
         from pinecone import Pinecone
@@ -169,7 +190,11 @@ async def clear_database():
 
         if PINECONE_INDEX_NAME in existing_indexes:
             index = pc.Index(PINECONE_INDEX_NAME)
-            index.delete(delete_all=True)
+            if session_id:
+                # Delete only this session's namespace
+                index.delete(delete_all=True, namespace=session_id)
+            else:
+                index.delete(delete_all=True)
 
         return {"message": "Database cleared successfully"}
 

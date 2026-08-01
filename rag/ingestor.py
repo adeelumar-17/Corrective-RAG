@@ -79,14 +79,15 @@ def ensure_pinecone_index() -> None:
 # ---------------------------------------------------------------------------
 # Main ingestion function
 # ---------------------------------------------------------------------------
-def ingest_pdfs(pdf_files: List[Tuple[str, bytes]]) -> int:
+def ingest_pdfs(pdf_files: List[Tuple[str, bytes]], session_id: str) -> int:
     """
     Process uploaded PDF files and store their chunks in Pinecone.
 
     Args:
-        pdf_files: List of (filename, file_bytes) tuples.
-                   Each tuple contains the original filename and the raw
-                   bytes of the PDF file (read from FastAPI's UploadFile).
+        pdf_files:   List of (filename, file_bytes) tuples.
+                     Each tuple contains the original filename and the raw
+                     bytes of the PDF file (read from FastAPI's UploadFile).
+        session_id:  Session ID used as Pinecone namespace for user isolation.
 
     Returns:
         The number of chunks stored in Pinecone.
@@ -136,12 +137,13 @@ def ingest_pdfs(pdf_files: List[Tuple[str, bytes]]) -> int:
     # ---- Step 3: Ensure Pinecone index exists ----
     ensure_pinecone_index()
 
-    # ---- Step 4: Embed and upsert to Pinecone ----
+    # ---- Step 4: Embed and upsert to Pinecone (namespaced by session) ----
     embeddings = get_embeddings()
     PineconeVectorStore.from_documents(
         documents=chunks,
         embedding=embeddings,
         index_name=PINECONE_INDEX_NAME,
+        namespace=session_id,
     )
 
     return len(chunks)

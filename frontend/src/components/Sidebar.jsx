@@ -2,13 +2,13 @@ import { useState, useRef } from 'react'
 import * as api from '../api'
 
 /**
- * Sidebar — PDF upload, document status, and clear button.
+ * Sidebar — PDF upload and document status.
  *
  * Props:
- *   docsLoaded      – boolean: are documents in Pinecone?
- *   chunkCount      – number: total vectors in Pinecone
+ *   docsLoaded       – boolean: are documents in Pinecone?
+ *   chunkCount       – number: total vectors in Pinecone
  *   onUploadComplete – (count) => void: called after successful upload
- *   onClear          – () => void: called after clearing the database
+ *   sessionId        – string: unique session ID for per-user isolation
  *   isOpen           – boolean: mobile sidebar visibility
  *   onClose          – () => void: close sidebar on mobile
  */
@@ -16,7 +16,7 @@ export default function Sidebar({
   docsLoaded,
   chunkCount,
   onUploadComplete,
-  onClear,
+  sessionId,
   isOpen,
   onClose,
 }) {
@@ -37,24 +37,13 @@ export default function Sidebar({
     setIsProcessing(true)
 
     try {
-      const data = await api.uploadPDFs(pdfs)
+      const data = await api.uploadPDFs(pdfs, sessionId)
       setSelectedFiles([])
       onUploadComplete(data.chunk_count)
     } catch (err) {
       alert(`Upload failed: ${err.message}`)
     } finally {
       setIsProcessing(false)
-    }
-  }
-
-  // ---- Clear ----
-  async function handleClear() {
-    if (!confirm('Clear all uploaded documents?')) return
-    try {
-      await api.clearDatabase()
-      onClear()
-    } catch (err) {
-      alert(`Clear failed: ${err.message}`)
     }
   }
 
@@ -145,11 +134,6 @@ export default function Sidebar({
           <span>{docsLoaded ? `${chunkCount} chunks loaded` : 'No documents loaded'}</span>
         </div>
       </div>
-
-      {/* Clear */}
-      <button className="btn btn-danger" onClick={handleClear}>
-        🗑️ Clear Database
-      </button>
 
       <div className="sidebar-footer">
         <p>Built with LangGraph + Pinecone + Groq</p>

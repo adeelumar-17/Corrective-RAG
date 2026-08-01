@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Sidebar from './components/Sidebar'
 import ChatArea from './components/ChatArea'
 import * as api from './api'
@@ -6,9 +6,11 @@ import * as api from './api'
 /**
  * App — Root component.
  *
- * Manages global state: messages, doc status, query loading.
- * On NEW session (tab open / browser restart), auto-clears Pinecone
- * so the free-tier doesn't fill up across sessions.
+ * Manages global state: messages, doc status, query loading, session identity.
+ *
+ * On EVERY page load (including refresh), generates a fresh session ID and
+ * clears any previous data. Each session uses a unique Pinecone namespace
+ * so concurrent users are fully isolated.
  */
 export default function App() {
   const [messages, setMessages] = useState([])
@@ -17,33 +19,26 @@ export default function App() {
   const [isQuerying, setIsQuerying] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // Generate a unique session ID on mount — persists for this page lifetime only
+  const sessionIdRef = useRef(crypto.randomUUID())
+
   // -------------------------------------------------------------------
-  // Session management: clear Pinecone on every NEW browser session
-  // sessionStorage is cleared when the tab/browser is closed,
-  // but persists across page refreshes within the same session.
+  // Session management: fresh session on every page load
+  // Each load gets a new UUID namespace — previous data is abandoned.
+  // We also call clear to clean up the new namespace (no-op, but safe).
   // -------------------------------------------------------------------
   useEffect(() => {
-    const sessionActive = sessionStorage.getItem('crag_session')
-
-    if (!sessionActive) {
-      // New session → clear the database, then check status
-      api.clearDatabase()
-        .then(() => {
-          sessionStorage.setItem('crag_session', 'true')
-          setDocsLoaded(false)
-          setChunkCount(0)
-        })
-        .catch(() => {
-          // If clear fails (e.g. backend not ready), still mark session
-          sessionStorage.setItem('crag_session', 'true')
-        })
-    } else {
-      // Existing session (page refresh) → just check current status
-      api.getStatus().then((data) => {
-        setDocsLoaded(data.docs_loaded)
-        setChunkCount(data.chunk_count)
+    // Fresh session on every mount — reset everything
+    api.clearDatabase(sessionIdRef.current)
+      .then(() => {
+        setDocsLoaded(false)
+        setChunkCount(0)
       })
-    }
+      .catch(() => {
+        // If clear fails (e.g. backend not ready), continue anyway
+        setDocsLoaded(false)
+        setChunkCount(0)
+      })
   }, [])
 
   // -------------------------------------------------------------------
@@ -53,12 +48,6 @@ export default function App() {
     setDocsLoaded(true)
     setChunkCount((prev) => prev + count)
     addSystemMessage(`✅ Processed ${count} chunks from your documents. Ask away!`)
-  }
-
-  function handleClear() {
-    setDocsLoaded(false)
-    setChunkCount(0)
-    addSystemMessage('🗑️ Database cleared. Upload new documents to get started.')
   }
 
   function addSystemMessage(text) {
@@ -78,7 +67,7 @@ export default function App() {
     setIsQuerying(true)
 
     try {
-      const data = await api.sendQuery(question)
+      const data = await api.sendQuery(question, sessionIdRef.current)
       setMessages((prev) => [
         ...prev,
         {
@@ -109,7 +98,7 @@ export default function App() {
         docsLoaded={docsLoaded}
         chunkCount={chunkCount}
         onUploadComplete={handleUploadComplete}
-        onClear={handleClear}
+        sessionId={sessionIdRef.current}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />

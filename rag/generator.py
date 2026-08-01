@@ -17,17 +17,28 @@ from langchain_core.messages import HumanMessage
 from rag import GROQ_API_KEY, LLM_MODEL
 
 
-# Generation prompt — instructs the LLM to answer from context only
-GENERATION_PROMPT_TEMPLATE = """You are a helpful assistant. Answer the user's question using ONLY the context provided below.
-Be concise, accurate, and cite which source your answer came from.
-If the context does not contain enough information, say so honestly.
+# Generation prompt — instructs the LLM to answer from the provided context
+GENERATION_PROMPT_TEMPLATE = """You are an expert research assistant. Your task is to provide a thorough, \
+well-structured answer to the user's question based on the provided context.
 
-Context:
+## Instructions
+1. **Use the context below as your primary source.** Synthesize information across multiple sources when relevant.
+2. **Cite your sources inline** using the format [Source N] so the user can trace each claim.
+3. **Structure your answer clearly:**
+   - Use **bold** for key terms and concepts.
+   - Use bullet points or numbered lists for multi-part answers.
+   - Provide examples or explanations when they add clarity.
+4. **If the context is insufficient**, provide what you can from the available sources and clearly state what information is missing or incomplete. Do NOT fabricate information.
+5. **If the question is about the document itself** (e.g., "What is this document about?", "Summarize this"), treat ALL provided chunks as relevant context and synthesize a comprehensive answer.
+6. **Tone**: Be informative, precise, and helpful. Write for a knowledgeable reader who values depth.
+
+## Context
 {formatted_chunks}
 
-Question: {question}
+## Question
+{question}
 
-Answer:"""
+## Answer"""
 
 
 def generate_answer(

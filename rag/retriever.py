@@ -18,12 +18,13 @@ from rag import PINECONE_INDEX_NAME, RETRIEVAL_K, RETRIEVAL_FETCH_K
 from rag.ingestor import get_embeddings
 
 
-def retrieve_documents(query: str) -> List[Document]:
+def retrieve_documents(query: str, session_id: str) -> List[Document]:
     """
     Retrieve the top-K most relevant (and diverse) document chunks from Pinecone.
 
     Args:
-        query: The user's question string.
+        query:      The user's question string.
+        session_id: Session ID used as Pinecone namespace for user isolation.
 
     Returns:
         A list of LangChain Document objects, each containing:
@@ -37,10 +38,11 @@ def retrieve_documents(query: str) -> List[Document]:
     try:
         embeddings = get_embeddings()
 
-        # Connect to the existing Pinecone index
+        # Connect to the existing Pinecone index with session-specific namespace
         vectorstore = PineconeVectorStore(
             index_name=PINECONE_INDEX_NAME,
             embedding=embeddings,
+            namespace=session_id,
         )
 
         # Create an MMR retriever
@@ -63,3 +65,4 @@ def retrieve_documents(query: str) -> List[Document]:
         # If Pinecone index doesn't exist yet (no docs uploaded), return empty
         print(f"[Retriever] Error: {e}")
         return []
+
